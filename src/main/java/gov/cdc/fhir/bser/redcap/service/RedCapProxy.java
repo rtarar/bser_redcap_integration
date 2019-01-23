@@ -1,6 +1,8 @@
 package gov.cdc.fhir.bser.redcap.service;
 
 import com.google.gson.Gson;
+
+import gov.cdc.fhir.bser.redcap.model.RedCapFeedbackInstrument;
 import gov.cdc.fhir.bser.redcap.model.RequestReferalInstrument;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -101,5 +103,29 @@ public class RedCapProxy {
 
         logger.info("respCode: " + respCode);
         logger.info("result: " + result.toString());
+    }
+    
+    public void getFeedBackData(RedCapFeedbackInstrument feedback) {
+    	
+    	//two susequent calls will have to be made
+    	//1. Call redcap to glean selected data (Patient info , Patient Id's)from the referral request form 
+    	//2. Call redcap tro glean Observatiuon Data from the visit form (bmi height weight etc)
+    	
+    	//When all data is recived then start creating the feedback Bundle with the values recieved.
+    	
+    	HttpResponse resp = null;
+        Gson gson = new Gson();
+
+        List<NameValuePair> params = new ArrayList<NameValuePair>();
+        params.add(new BasicNameValuePair("token", _token));
+        params.add(new BasicNameValuePair("content", "record"));
+        params.add(new BasicNameValuePair("format", "json"));
+        params.add(new BasicNameValuePair("returnFormat", "json"));
+        params.add(new BasicNameValuePair("type", "flat"));
+        params.add(new BasicNameValuePair("overwriteBehavior", "normal"));
+        params.add(new BasicNameValuePair("forceAutoNumber", "false"));
+        params.add(new BasicNameValuePair("returnContent", "count"));
+        //params.add(new BasicNameValuePair("data", "[{\"record_id\":\"6\",\"firstname\":\"Spring\",\"lastname\":\"Boot\",\"age\":\"2\"}]"));
+        params.add(new BasicNameValuePair("data", "[" + gson.toJson(newRecord) + "]"));
     }
 }
