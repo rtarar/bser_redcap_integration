@@ -2,11 +2,17 @@ package gov.cdc.fhir.bser.redcap.service;
 
 import gov.cdc.fhir.bser.redcap.model.RequestReferalInstrument;
 import org.hl7.fhir.dstu3.model.*;
+import org.hl7.fhir.dstu3.model.Bundle.BundleEntryComponent;
 import org.springframework.stereotype.Component;
 
+import com.google.gson.internal.LinkedTreeMap;
+
+import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Component
 public class FHIRProxy {
@@ -15,6 +21,8 @@ public class FHIRProxy {
     public static final String VITAL_SIGN_A1C = "4548-4";
     public static final String PRACTITIONER_ROLE_PROFILE = "http://hl7.org/fhir/us/bser/StructureDefinition/ReferralInitiatorPractitionerRole";
 
+    
+    
     public RequestReferalInstrument processReferral(Bundle results) {
         RequestReferalInstrument instrument = new RequestReferalInstrument();
         List<Bundle.BundleEntryComponent> entries = results.getEntry();
@@ -65,6 +73,108 @@ public class FHIRProxy {
         }
         return instrument;
     }
+    
+    public void processFeedBack(Map<String,Object> map,Bundle feedBackBundle){
+    	List<Resource> theResources = processFeedBackBundle(feedBackBundle,map);
+    	
+    }
+    
+    
+    public  List<Resource> processFeedBackBundle(Bundle bundle,Map map) {
+        //generate a list of resources...
+        List<Resource> theResources = new ArrayList<Resource>();    //list of resources in bundle
+        for (BundleEntryComponent entry : bundle.getEntry()) {
+            theResources.add(entry.getResource());
+        }
+        return process(theResources,map);
+    }
+    
+    
+    private  Patient getPatient(List<Resource> theResources,Map<String,String> map) {
+    	
+    	for(Resource resource : theResources) {
+     	   System.out.println(resource.getResourceType());
+     	   if(ResourceType.Patient.equals(resource.getResourceType())) {
+     		   Patient p = (Patient)resource;
+     		   return p;
+     	   }
+    	}
+    	return null;
+    }
+    
+    
+    private  List<Resource> process(List<Resource> theResources,Map<String,String> map) {
+        Patient patient = getPatient(theResources,map);     //this will be the patient resource. There should only be one....
+        List<Resource> processed = new ArrayList<Resource>();
+        
+       for(Resource resource : theResources) {
+    	   System.out.println(resource.getResourceType());
+    	   if(ResourceType.Patient.equals(resource.getResourceType())) {
+    		   Patient p = (Patient)resource;
+    		   System.out.println(p.getIdentifierFirstRep().getValue());
+    		   patient= p;
+       		   processed.add(processPatient(p,map));
+    	   }else if(ResourceType.MessageHeader.equals(resource.getResourceType())) {
+    		   //NOOP Just use the same from the xml
+    		   
+    	   }else if(ResourceType.Composition.equals(resource.getResourceType())){
+    		   Composition c = (Composition) resource;
+    		  // c.getIdentifier().setValue(map.get("feedback_referral_id"));
+    		   Narrative n = new Narrative();
+    		   n.setDivAsString(map.get("feedback_note"));
+    		   c.getSectionFirstRep().setText(n);
+    		   c.setSubject(new Reference(patient.getId()));
+    		   processed.add(c);
+    	   }else if(ResourceType.Observation.equals(resource.getResourceType())){
+    		   //Education Level 
+    	   }else if(ResourceType.Bundle.equals(resource.getResourceType())){
+    		   Bundle bundle = (Bundle) resource;
+    		   for (BundleEntryComponent entry : bundle.getEntry()) {
+    	           Observation o = (Observation)entry.getResource();
+    	           if("39156-5".equals(o.getCode().getCodingFirstRep().getCode())){
+    	        	   //BMI
+    	        	   o.setValue(new Quantity(Long.parseLong(map.get("visit_patient_bmi"))));
+    	        	   
+    	        	   
+    	           }else if("29463-7".equals(o.getCode().getCodingFirstRep().getCode())){
+    	        	   //body weight
+    	        	   
+    	        	   o.setValue(new Quantity(Long.parseLong(map.get("visit_patient_weight"))));
+    	        	   
+    	           }else if("8302-2".equals(o.getCode().getCodingFirstRep().getCode())){
+    	        	   //body height
+    	        	   
+    	        	   o.setValue(new Quantity(Long.parseLong(map.get("visit_patient_height"))));
+    	        	   
+    	           }else if("4548-4".equals(o.getCode().getCodingFirstRep().getCode())){
+    	        	   //a1c count
+    	        	   
+    	        	   o.setValue(new Quantity(Long.parseLong(map.get("visit_a1c_count"))));
+    	        	   
+    	           }
+    	           //set the patient link
+    	           o.setSubject(new Reference(patient.getId()));
+    	           System.out.println(o.getValueQuantity().getValue());
+    	        }
+    		   processed.add(bundle);
+    	   }
+       }
+ 
+       return theResources;
+    }
+    
+    public  Patient processPatient(Patient p ,Map<String,String> map) {
+    	
+    	p.getIdentifierFirstRep().setValue(map.get("patient_mr_number"));
+    	p.getNameFirstRep()
+    			.setFamily(map.get("patient_family_name"))
+    			.addGiven(map.get("patient_given_name"))
+    			.addPrefix(map.get("patient_name_prefix"));
+    	//p.setBirthDate(new Date((map.get("patient_age"))));
+    	return p;
+    }
+    
+    
 
     private static String getAddress(Address address) {
         String str = "";
